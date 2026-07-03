@@ -355,6 +355,20 @@
       font-size: 14px;
     }
 
+    .track-label {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: rgba(255, 107, 53, 0.8);
+      border-radius: 25px;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 99;
+      pointer-events: none;
+    }
+
     @media(max-width: 900px) {
       .grid-2 { grid-template-columns: 1fr; }
       .hud-top { flex-direction: column; gap: 10px; }
@@ -389,27 +403,27 @@
 <div id="mode-overlay" class="menu-overlay hidden">
   <button class="back-btn" id="back-mode-btn">← BACK</button>
   <div class="menu-container">
-    <h1 class="menu-title">SELECT RACE MODE</h1>
+    <h1 class="menu-title">SELECT TRACK</h1>
     <div class="grid-2" style="margin-top: 40px;">
-      <div class="card" id="race-mode">
+      <div class="card" id="monaco-track">
+        <div class="card-icon">🏰</div>
+        <div class="card-title">MONACO</div>
+        <div class="card-desc">Iconic street circuit</div>
+      </div>
+      <div class="card" id="monza-track">
         <div class="card-icon">🏁</div>
-        <div class="card-title">GRAND PRIX</div>
-        <div class="card-desc">Full race against AI drivers</div>
+        <div class="card-title">MONZA</div>
+        <div class="card-desc">Speed circuit in Italy</div>
       </div>
-      <div class="card" id="time-trial-mode">
-        <div class="card-icon">⏱️</div>
-        <div class="card-title">TIME TRIAL</div>
-        <div class="card-desc">Beat your best lap time</div>
+      <div class="card" id="silverstone-track">
+        <div class="card-icon">🇬🇧</div>
+        <div class="card-title">SILVERSTONE</div>
+        <div class="card-desc">High-speed British track</div>
       </div>
-      <div class="card" id="quick-race-mode">
-        <div class="card-icon">⚡</div>
-        <div class="card-title">QUICK RACE</div>
-        <div class="card-desc">Fast 3-lap race</div>
-      </div>
-      <div class="card" id="championship-mode">
-        <div class="card-icon">👑</div>
-        <div class="card-title">CHAMPIONSHIP</div>
-        <div class="card-desc">Multi-round season</div>
+      <div class="card" id="suzuka-track">
+        <div class="card-icon">🍁</div>
+        <div class="card-title">SUZUKA</div>
+        <div class="card-desc">Figure-eight Japanese GP</div>
       </div>
     </div>
   </div>
@@ -472,6 +486,8 @@
   </div>
 </div>
 
+<div id="track-label" class="track-label" style="display: none;"></div>
+
 <div id="game-container">
   <canvas id="game-canvas"></canvas>
 </div>
@@ -531,16 +547,14 @@ import * as THREE from 'three';
 import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
 
-// Prevent default touch behaviors
 document.addEventListener('touchmove', e => {
   if(e.target.id === 'game-container' || e.target.tagName === 'CANVAS') e.preventDefault();
 }, {passive: false});
 
 // ============ GAME STATE ============
 let gameState = {
-  mode: 'grand-prix',
+  track: 'monaco',
   started: false,
   finished: false,
   distance: 0,
@@ -560,11 +574,44 @@ let gameState = {
   speedSamples: []
 };
 
+// ============ TRACK DEFINITIONS ============
+const tracks = {
+  monaco: {
+    name: 'MONACO',
+    length: 3337,
+    curves: 0.8,
+    elevation: 0.3,
+    straights: 2
+  },
+  monza: {
+    name: 'MONZA',
+    length: 5793,
+    curves: 0.4,
+    elevation: 0.1,
+    straights: 4
+  },
+  silverstone: {
+    name: 'SILVERSTONE',
+    length: 5891,
+    curves: 0.6,
+    elevation: 0.5,
+    straights: 3
+  },
+  suzuka: {
+    name: 'SUZUKA',
+    length: 5807,
+    curves: 1.0,
+    elevation: 0.8,
+    straights: 2
+  }
+};
+
 // ============ MENU HANDLING ============
 const menuOverlay = document.getElementById('menu-overlay');
 const modeOverlay = document.getElementById('mode-overlay');
 const garageOverlay = document.getElementById('garage-overlay');
 const finishOverlay = document.getElementById('finish-overlay');
+const trackLabel = document.getElementById('track-label');
 
 const playBtn = document.getElementById('play-btn');
 const garageBtn = document.getElementById('garage-btn');
@@ -611,20 +658,17 @@ menuBtn.addEventListener('click', () => {
   menuOverlay.classList.remove('hidden');
 });
 
-// Mode selection
-const raceModes = {
-  'race-mode': 'grand-prix',
-  'time-trial-mode': 'time-trial',
-  'quick-race-mode': 'quick-race',
-  'championship-mode': 'championship'
+// Track selection
+const trackModes = {
+  'monaco-track': 'monaco',
+  'monza-track': 'monza',
+  'silverstone-track': 'silverstone',
+  'suzuka-track': 'suzuka'
 };
 
-Object.entries(raceModes).forEach(([id, mode]) => {
+Object.entries(trackModes).forEach(([id, track]) => {
   document.getElementById(id).addEventListener('click', () => {
-    gameState.mode = mode;
-    if(mode === 'time-trial') gameState.maxLaps = 1;
-    else if(mode === 'quick-race') gameState.maxLaps = 3;
-    else gameState.maxLaps = 5;
+    gameState.track = track;
     startGame();
   });
 });
@@ -634,12 +678,15 @@ function startGame() {
   gameState.started = true;
   gameState.finished = false;
   resetGameState();
+  trackLabel.style.display = 'block';
+  trackLabel.textContent = '🏁 ' + tracks[gameState.track].name + ' 🏁';
   animate();
 }
 
 function resetGame() {
   gameState.started = false;
   gameState.finished = false;
+  trackLabel.style.display = 'none';
   resetGameState();
 }
 
@@ -668,8 +715,8 @@ function resetGameState() {
 const container = document.getElementById('game-container');
 const canvas = document.getElementById('game-canvas');
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x0a0e27, 400, 1200);
-scene.background = new THREE.Color(0x0a0e27);
+scene.fog = new THREE.Fog(0x87ceeb, 600, 1400);
+scene.background = new THREE.Color(0x87ceeb);
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -679,29 +726,28 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.1;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 
-// Post-processing
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, null);
 composer.addPass(renderPass);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
 composer.addPass(bloomPass);
 
 const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 8000);
 camera.position.set(0, 10, -20);
 
-// Lighting
-const ambientLight = new THREE.AmbientLight(0x8899ff, 0.6);
+// Lighting - Daytime
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
 const hemi = new THREE.HemisphereLight(0x87ceeb, 0x2d5016, 0.9);
 scene.add(hemi);
 
-const sunLight = new THREE.DirectionalLight(0xffffff, 2);
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.8);
 sunLight.position.set(200, 250, 150);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
@@ -713,12 +759,61 @@ sunLight.shadow.camera.bottom = -500;
 sunLight.shadow.bias = -0.0001;
 scene.add(sunLight);
 
-const accentLight = new THREE.PointLight(0xff6b35, 1.2, 800);
-accentLight.position.set(-150, 150, 250);
-accentLight.castShadow = true;
-scene.add(accentLight);
-
 // ============ TRACK CREATION ============
+let trackMesh, trackLength, trackData;
+
+function createTrack() {
+  if(trackMesh) scene.remove(trackMesh);
+  
+  const track = tracks[gameState.track];
+  trackLength = track.length;
+  trackData = track;
+  
+  const roadTex = makeAdvancedRoadTexture();
+  roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
+  roadTex.repeat.set(50, 1);
+  
+  const trackGeom = new THREE.PlaneGeometry(45, trackLength, 30, 200);
+  trackGeom.rotateX(-Math.PI / 2);
+  
+  const pos = trackGeom.attributes.position;
+  for(let i = 0; i < pos.count; i++) {
+    const z = pos.getY(i);
+    const t = (z + trackLength / 2) / trackLength;
+    
+    let curve = Math.sin(t * Math.PI * track.curves) * 12 + 
+                Math.sin(t * Math.PI * 3) * 5;
+    let elevation = Math.sin(t * Math.PI * track.elevation) * 3;
+    
+    pos.setX(i, pos.getX(i) + curve);
+    pos.setZ(i, pos.getZ(i) + elevation * 0.3);
+  }
+  trackGeom.computeVertexNormals();
+  
+  const trackMat = new THREE.MeshStandardMaterial({
+    map: roadTex,
+    metalness: 0.2,
+    roughness: 0.8
+  });
+  trackMesh = new THREE.Mesh(trackGeom, trackMat);
+  trackMesh.receiveShadow = true;
+  trackMesh.castShadow = true;
+  scene.add(trackMesh);
+  
+  // Curbing
+  for(const x of [-24, 24]) {
+    const curbGeo = new THREE.BoxGeometry(1, 0.5, trackLength);
+    const curbMat = new THREE.MeshStandardMaterial({color: 0xff3300, metalness: 0.3});
+    const curb = new THREE.Mesh(curbGeo, curbMat);
+    curb.position.set(x, 0.25, 0);
+    curb.castShadow = true;
+    curb.receiveShadow = true;
+    scene.add(curb);
+  }
+  
+  createEnvironment();
+}
+
 function makeAdvancedRoadTexture() {
   const w = 1024, h = 1024;
   const c = document.createElement('canvas');
@@ -761,46 +856,121 @@ function makeAdvancedRoadTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-const trackLength = 5000;
-const roadTex = makeAdvancedRoadTexture();
-roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
-roadTex.repeat.set(50, 1);
-
-const trackGeom = new THREE.PlaneGeometry(45, trackLength, 20, 300);
-trackGeom.rotateX(-Math.PI / 2);
-
-const pos = trackGeom.attributes.position;
-for(let i = 0; i < pos.count; i++) {
-  const z = pos.getY(i);
-  const t = (z + trackLength / 2) / trackLength;
-  const curve = Math.sin(t * Math.PI * 2.5) * 10 + 
-                Math.sin(t * Math.PI * 4) * 4 + 
-                Math.cos(t * Math.PI * 1.3) * 3;
-  const elevation = Math.sin(t * Math.PI * 3) * 1.5;
-  pos.setX(i, pos.getX(i) + curve);
-  pos.setZ(i, pos.getZ(i) + elevation * 0.4);
+function createEnvironment() {
+  // Remove existing environment
+  const toRemove = scene.children.filter(obj => 
+    obj.userData && (obj.userData.type === 'tree' || obj.userData.type === 'grandstand' || obj.userData.type === 'building')
+  );
+  toRemove.forEach(obj => scene.remove(obj));
+  
+  const trackLen = trackLength;
+  
+  // Create trees
+  for(let i = 0; i < 40; i++) {
+    const progress = (i / 40) * trackLen;
+    const pos = trackPosition(progress);
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const tree = createTree();
+    tree.position.copy(pos);
+    tree.position.x += side * (35 + Math.random() * 50);
+    tree.userData.type = 'tree';
+    scene.add(tree);
+  }
+  
+  // Create grandstands
+  for(let i = 0; i < 5; i++) {
+    const progress = (i / 5) * trackLen;
+    const pos = trackPosition(progress);
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const stand = createGrandstand();
+    stand.position.copy(pos);
+    stand.position.x += side * 40;
+    stand.userData.type = 'grandstand';
+    scene.add(stand);
+  }
+  
+  // Create buildings
+  for(let i = 0; i < 3; i++) {
+    const progress = (i / 3) * trackLen;
+    const pos = trackPosition(progress);
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const building = createBuilding();
+    building.position.copy(pos);
+    building.position.x += side * (50 + Math.random() * 80);
+    building.userData.type = 'building';
+    scene.add(building);
+  }
 }
-trackGeom.computeVertexNormals();
 
-const trackMat = new THREE.MeshStandardMaterial({
-  map: roadTex,
-  metalness: 0.2,
-  roughness: 0.8
-});
-const trackMesh = new THREE.Mesh(trackGeom, trackMat);
-trackMesh.receiveShadow = true;
-trackMesh.castShadow = true;
-scene.add(trackMesh);
+function createTree() {
+  const tree = new THREE.Group();
+  
+  const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 8, 8);
+  const trunkMat = new THREE.MeshStandardMaterial({color: 0x4a3a2a, roughness: 0.8});
+  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+  trunk.position.y = 4;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  tree.add(trunk);
+  
+  const foliageGeo = new THREE.ConeGeometry(6, 12, 8);
+  const foliageMat = new THREE.MeshStandardMaterial({color: 0x2d5016, roughness: 0.9});
+  const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+  foliage.position.y = 12;
+  foliage.castShadow = true;
+  tree.add(foliage);
+  
+  return tree;
+}
 
-// Curbing
-for(const x of [-24, 24]) {
-  const curbGeo = new THREE.BoxGeometry(1, 0.5, trackLength);
-  const curbMat = new THREE.MeshStandardMaterial({color: 0xff3300, metalness: 0.3});
-  const curb = new THREE.Mesh(curbGeo, curbMat);
-  curb.position.set(x, 0.25, 0);
-  curb.castShadow = true;
-  curb.receiveShadow = true;
-  scene.add(curb);
+function createGrandstand() {
+  const stand = new THREE.Group();
+  
+  const baseMat = new THREE.MeshStandardMaterial({color: 0x555555, roughness: 0.7});
+  const base = new THREE.Mesh(new THREE.BoxGeometry(15, 1, 20), baseMat);
+  base.position.y = 0.5;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  stand.add(base);
+  
+  for(let row = 0; row < 4; row++) {
+    for(let col = 0; col < 8; col++) {
+      const seatMat = new THREE.MeshStandardMaterial({color: Math.random() > 0.5 ? 0xff3300 : 0xffcc00, roughness: 0.6});
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 1.2), seatMat);
+      seat.position.set((col - 3.5) * 1.5, 1.5 + row * 1.2, row * 0.5);
+      seat.castShadow = true;
+      stand.add(seat);
+    }
+  }
+  
+  return stand;
+}
+
+function createBuilding() {
+  const building = new THREE.Group();
+  
+  const height = 15 + Math.random() * 20;
+  const width = 8 + Math.random() * 12;
+  const depth = 6 + Math.random() * 10;
+  
+  const buildingMat = new THREE.MeshStandardMaterial({color: 0x999999, roughness: 0.8});
+  const bldg = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), buildingMat);
+  bldg.position.y = height / 2;
+  bldg.castShadow = true;
+  bldg.receiveShadow = true;
+  building.add(bldg);
+  
+  // Windows
+  for(let y = 0; y < Math.floor(height / 3); y++) {
+    for(let x = 0; x < Math.floor(width / 2); x++) {
+      const windowMat = new THREE.MeshStandardMaterial({color: 0xffffcc, emissive: 0xffff99, emissiveIntensity: 0.3});
+      const window = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.2), windowMat);
+      window.position.set((x - 1.5) * 2.5, 2 + y * 3.5, depth / 2 + 0.1);
+      building.add(window);
+    }
+  }
+  
+  return building;
 }
 
 // ============ CAR MODEL ============
@@ -898,13 +1068,13 @@ window.addEventListener('keyup', e => {
 
 // Touch controls
 const leftBtn = document.createElement('div');
-leftBtn.style.cssText = 'position:fixed;bottom:20px;left:20px;width:80px;height:80px;background:rgba(255,107,53,0.3);border:2px solid rgba(255,107,53,0.5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;z-index:50;touch-action:none;';
+leftBtn.style.cssText = 'position:fixed;bottom:20px;left:20px;width:80px;height:80px;background:rgba(255,107,53,0.3);border:2px solid rgba(255,107,53,0.5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;z-index:50;user-select:none;font-weight:bold;';
 leftBtn.innerHTML = '←';
 leftBtn.addEventListener('pointerdown', () => keys.left = 1);
 leftBtn.addEventListener('pointerup', () => keys.left = 0);
 
 const rightBtn = document.createElement('div');
-rightBtn.style.cssText = 'position:fixed;bottom:20px;right:20px;width:80px;height:80px;background:rgba(255,107,53,0.3);border:2px solid rgba(255,107,53,0.5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;cursor:pointer;z-index:50;touch-action:none;';
+rightBtn.style.cssText = 'position:fixed;bottom:20px;right:20px;width:80px;height:80px;background:rgba(255,107,53,0.3);border:2px solid rgba(255,107,53,0.5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;z-index:50;user-select:none;font-weight:bold;';
 rightBtn.innerHTML = '→';
 rightBtn.addEventListener('pointerdown', () => keys.right = 1);
 rightBtn.addEventListener('pointerup', () => keys.right = 0);
@@ -931,24 +1101,21 @@ function updateMiniMap() {
   const playerAngle = (gameState.distance / trackLength) * Math.PI * 2;
   miniMapCtx.fillRect(70 + Math.cos(playerAngle) * 50 - 2, 70 + Math.sin(playerAngle) * 50 - 2, 4, 4);
   
-  if(gameState.mode === 'grand-prix' || gameState.mode === 'championship') {
-    opponents.forEach((opp, idx) => {
-      miniMapCtx.fillStyle = ['#0d47a1', '#ffc107', '#2e7d32'][idx];
-      const oppAngle = (opp.progress / trackLength) * Math.PI * 2;
-      miniMapCtx.fillRect(70 + Math.cos(oppAngle) * 50 - 2, 70 + Math.sin(oppAngle) * 50 - 2, 4, 4);
-    });
-  }
+  opponents.forEach((opp, idx) => {
+    miniMapCtx.fillStyle = ['#0d47a1', '#ffc107', '#2e7d32'][idx];
+    const oppAngle = (opp.progress / trackLength) * Math.PI * 2;
+    miniMapCtx.fillRect(70 + Math.cos(oppAngle) * 50 - 2, 70 + Math.sin(oppAngle) * 50 - 2, 4, 4);
+  });
 }
 
 // ============ TRACK POSITION ============
 function trackPosition(progress) {
   const t = (progress % trackLength) / trackLength;
   const z = (t - 0.5) * trackLength;
-  const x = Math.sin(t * Math.PI * 2.5) * 10 + 
-            Math.sin(t * Math.PI * 4) * 4 + 
-            Math.cos(t * Math.PI * 1.3) * 3;
-  const elevation = Math.sin(t * Math.PI * 3) * 1.5;
-  return new THREE.Vector3(x, elevation * 0.4, z);
+  const curve = Math.sin(t * Math.PI * trackData.curves) * 12 + 
+                Math.sin(t * Math.PI * 3) * 5;
+  const elevation = Math.sin(t * Math.PI * trackData.elevation) * 3;
+  return new THREE.Vector3(curve, elevation * 0.3, z);
 }
 
 // ============ HUD UPDATES ============
@@ -998,94 +1165,73 @@ function animate(now = performance.now()) {
   steerAngle += (steerInput * maxSteer - steerAngle) * 8 * dt;
   steerAngle = Math.max(-maxSteer, Math.min(maxSteer, steerAngle));
   
-  // Speed dynamics with acceleration
-  const targetSpeed = 80;
-  gameState.speed += (targetSpeed - gameState.speed) * 0.5 * dt;
-  gameState.speed = Math.max(20, gameState.speed);
+  // Physics
+  gameState.speed = Math.max(0, gameState.speed - 8 * steerAngle * steerAngle * dt);
+  gameState.speed = Math.min(100, gameState.speed + 45 * dt);
+  gameState.fuel = Math.max(0, gameState.fuel - 0.02 * dt);
+  gameState.tireWear = Math.min(100, gameState.tireWear + Math.abs(steerAngle) * 15 * dt);
+  gameState.damage = Math.max(0, gameState.damage + Math.random() * 0.01);
   
-  // RPM calculation
-  gameState.rpm = (gameState.speed / 80) * 8000;
-  gameState.gear = gameState.speed < 10 ? 'N' : String(Math.max(1, Math.floor((gameState.speed / 80) * 6)));
-  
-  // Distance and lap tracking
-  gameState.distance += gameState.speed * dt * 2.8;
-  gameState.lapTime += dt;
+  gameState.distance += gameState.speed * 0.5 * dt;
   gameState.totalTime += dt;
+  gameState.lapTime += dt;
   gameState.speedSamples.push(gameState.speed);
   
-  // Calculate average speed
-  gameState.avgSpeed = gameState.speedSamples.reduce((a, b) => a + b, 0) / gameState.speedSamples.length;
-  
-  // Lap management
-  const newLap = Math.floor(gameState.distance / trackLength) + 1;
-  if(newLap > gameState.currentLap && newLap <= gameState.maxLaps) {
-    gameState.currentLap = newLap;
+  // Lap detection
+  const lapDist = Math.floor(gameState.distance / trackLength);
+  if(lapDist > gameState.currentLap) {
+    gameState.currentLap = lapDist;
     if(gameState.lapTime < gameState.bestLapTime) {
       gameState.bestLapTime = gameState.lapTime;
     }
     gameState.lapTime = 0;
   }
   
-  // Fuel consumption
-  gameState.fuel = Math.max(0, 100 - gameState.distance * 0.003);
-  
-  // Damage and tire wear accumulation
-  gameState.damage = Math.min(100, gameState.damage + Math.random() * 0.01);
-  gameState.tireWear = (gameState.distance / trackLength) * 20;
-  
-  // Lateral physics with drift
-  const driftFactor = Math.abs(steerAngle) * 2;
-  playerX += steerAngle * 8 * dt;
-  playerX += -playerX * (2 + driftFactor) * dt;
-  playerX = Math.max(-8, Math.min(8, playerX));
-  
-  // Update player car position and rotation
-  const pos = trackPosition(gameState.distance);
-  playerCar.position.lerp(new THREE.Vector3(pos.x + playerX, pos.y + 0.5, pos.z), 0.85);
-  playerCar.rotation.y = -Math.atan2(playerX, 10) * 0.6 + Math.atan2(steerAngle, 1) * 0.3;
-  playerCar.rotation.z = steerAngle * 0.2;
-  
-  // Update opponents AI
-  gameState.position = 1;
-  opponents.forEach((opp, idx) => {
-    opp.progress += opp.speed * dt * 2.8;
-    if(gameState.distance > opp.progress) gameState.position++;
-    
-    const tp = trackPosition(opp.progress);
-    const sway = Math.sin(now * 0.0008 + idx * 1.5) * 1.2;
-    opp.mesh.position.lerp(new THREE.Vector3(tp.x + sway, tp.y + 0.5, tp.z), 0.6);
-    opp.mesh.rotation.y = -Math.atan2(sway, 10) * 0.3;
-    opp.damage += Math.random() * 0.02;
-  });
-  
-  // Camera following
-  const desiredPos = new THREE.Vector3().copy(playerCar.position).add(
-    new THREE.Vector3(0, 8, -16).applyQuaternion(playerCar.quaternion)
-  );
-  camera.position.lerp(desiredPos, 0.08);
-  camera.lookAt(new THREE.Vector3().copy(playerCar.position).add(new THREE.Vector3(0, 2.5, 0)));
-  
-  // Finish condition
-  if(gameState.currentLap >= gameState.maxLaps && gameState.distance % trackLength > 4900) {
-    if(!gameState.finished) {
-      gameState.finished = true;
-      gameState.started = false;
-      showFinishScreen();
-    }
+  if(gameState.currentLap > gameState.maxLaps) {
+    gameState.speed = 0;
+    gameState.started = false;
+    gameState.finished = true;
+    gameState.avgSpeed = gameState.speedSamples.reduce((a, b) => a + b, 0) / gameState.speedSamples.length;
+    showFinishScreen();
+    return;
   }
   
-  // Update displays
-  renderPass.camera = camera;
+  // Player position update
+  const playerPos = trackPosition(gameState.distance);
+  playerX += steerAngle * gameState.speed * 0.02 * dt;
+  playerX = Math.max(-12, Math.min(12, playerX));
+  playerCar.position.copy(playerPos);
+  playerCar.position.x += playerX;
+  playerCar.rotation.y = steerAngle * 0.3;
+  
+  // Opponent AI
+  gameState.position = 1;
+  opponents.forEach((opp, i) => {
+    opp.speed += (60 + Math.random() * 5 - opp.speed) * 0.1 * dt;
+    opp.speed = Math.max(30, Math.min(85, opp.speed));
+    opp.progress += opp.speed * 0.5 * dt;
+    
+    const oppPos = trackPosition(opp.progress);
+    opp.mesh.position.copy(oppPos);
+    opp.mesh.position.x += (Math.random() - 0.5) * 5;
+    
+    if(opp.progress > gameState.distance) gameState.position++;
+  });
+  
+  // Camera follow
+  const camDist = trackPosition(gameState.distance - 20);
+  camera.position.lerp(new THREE.Vector3(playerX * 0.5, 15, camDist.z - 20), 0.1);
+  camera.lookAt(playerPos.x, 1, playerPos.z);
+  
   updateHUD();
   updateMiniMap();
   composer.render();
-  
-  if(gameState.started) requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 }
 
-// Initial render
-onWindowResize();
-composer.render();
+// Initialize track on startup
+createTrack();
+animate();
 </script>
 
 </body>
